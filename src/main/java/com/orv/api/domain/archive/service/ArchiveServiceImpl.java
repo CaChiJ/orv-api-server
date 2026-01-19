@@ -6,11 +6,18 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.net.URL;
+import java.time.Instant;
 
 import org.bytedeco.javacv.FFmpegFrameGrabber;
 import org.bytedeco.javacv.Frame;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+import com.orv.api.domain.archive.repository.VideoDurationExtractionJobRepository;
 import com.orv.api.domain.archive.repository.VideoRepository;
 import com.orv.api.domain.archive.service.dto.ImageMetadata;
 import com.orv.api.domain.archive.service.dto.PresignedUrlInfo;
@@ -18,26 +25,17 @@ import com.orv.api.domain.archive.service.dto.Video;
 import com.orv.api.domain.archive.service.dto.VideoMetadata;
 import com.orv.api.domain.archive.service.dto.VideoStatus;
 
-import org.springframework.beans.factory.annotation.Value;
-
-import lombok.extern.slf4j.Slf4j;
-
-import java.net.URL;
-import java.time.Instant;
-
 @Service
 @Slf4j
+@RequiredArgsConstructor
 public class ArchiveServiceImpl implements ArchiveService {
     private static final long PRESIGNED_URL_EXPIRATION_MINUTES = 60;
 
     private final VideoRepository videoRepository;
+    private final VideoDurationExtractionJobRepository videoDurationExtractionJobRepository;
 
     @Value("${cloud.aws.cloudfront.domain}")
     private String cloudfrontDomain;
-
-    public ArchiveServiceImpl(VideoRepository videoRepository) {
-        this.videoRepository = videoRepository;
-    }
 
     @Override
     public Optional<String> uploadRecordedVideo(InputStream videoStream, String contentType, long size, UUID storyboardId, UUID memberId) {
@@ -165,6 +163,7 @@ public class ArchiveServiceImpl implements ArchiveService {
     }
 
     @Override
+    @Transactional
     public Optional<String> confirmUpload(UUID videoId, UUID memberId) {
         // 1. video 레코드 조회
         Optional<Video> videoOpt = videoRepository.findById(videoId);
@@ -206,8 +205,9 @@ public class ArchiveServiceImpl implements ArchiveService {
             return Optional.empty();
         }
 
-        // TODO: 큐에 영상 길이 측정 태스크 추가
-        // messageQueue.send(new VideoProcessingTask(videoId));
+        // 6. 영상 길이 측정 태스크 추가
+        videoDurationExtractionJobRepository.create(videoId);
+        log.info("Created duration extraction job for video: {}", videoId);
 
         return Optional.of(videoId.toString());
     }

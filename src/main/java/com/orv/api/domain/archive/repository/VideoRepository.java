@@ -36,4 +36,6 @@ public interface VideoRepository {
     boolean updateVideoUrlAndStatus(UUID videoId, String videoUrl, String status);
 
     boolean deleteVideo(UUID videoId);
+
+    boolean updateRunningTime(UUID videoId, int runningTimeSeconds);
 }

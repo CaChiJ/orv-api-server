@@ -266,4 +266,18 @@ public class S3VideoRepository implements VideoRepository {
         String sql = "SELECT id, storyboard_id, member_id, video_url, created_at, thumbnail_url, running_time, title, status FROM video WHERE member_id = ?";
         return jdbcTemplate.query(sql, new Object[]{memberId}, new BeanPropertyRowMapper<>(Video.class));
     }
+
+    @Override
+    public boolean updateRunningTime(UUID videoId, int runningTimeSeconds) {
+        try {
+            int updated = jdbcTemplate.update(
+                    "UPDATE video SET running_time = ? WHERE id = ?",
+                    runningTimeSeconds, videoId
+            );
+            return updated > 0;
+        } catch (Exception e) {
+            log.error("Failed to update running time: {}", videoId, e);
+            return false;
+        }
+    }
 }
