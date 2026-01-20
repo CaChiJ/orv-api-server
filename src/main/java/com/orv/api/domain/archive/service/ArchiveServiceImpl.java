@@ -38,9 +38,10 @@ public class ArchiveServiceImpl implements ArchiveService {
     private String cloudfrontDomain;
 
     @Override
+    @Deprecated
+    // TODO: 프론트엔드 의존성 해소 후 엔드포인트 제거
     public Optional<String> uploadRecordedVideo(InputStream videoStream, String contentType, long size, UUID storyboardId, UUID memberId) {
         try {
-            // TODO: 영상 처리 작업을 별도 서버로 분리한 후 아래의 영상 처리 작업 코드를 제거해야 함.
             // Create a temporary file to calculate running time
             File tempFile = File.createTempFile("upload-" + System.currentTimeMillis(), ".tmp");
             try {
@@ -107,8 +108,9 @@ public class ArchiveServiceImpl implements ArchiveService {
         return videoRepository.updateThumbnail(videoId, thumbnailStream, metadata);
     }
 
+    @Deprecated
+    // TODO: V0 API 제거 시 함께 제거
     private double calculateRunningTime(File videoFile) {
-        // TODO: Running Time 계산 로직을 별도 서버로 분리해야 함.
         try {
             double durationInSeconds = 0.0;
             try (FFmpegFrameGrabber grabber = new FFmpegFrameGrabber(videoFile)) {
@@ -146,8 +148,7 @@ public class ArchiveServiceImpl implements ArchiveService {
         }
     }
 
-    // v1 API methods
-
+    // v1 API methods below
     @Override
     public PresignedUrlInfo requestUploadUrl(UUID storyboardId, UUID memberId) {
         // 1. PENDING 상태로 video 레코드 생성

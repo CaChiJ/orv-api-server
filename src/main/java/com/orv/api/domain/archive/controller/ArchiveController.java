@@ -23,6 +23,7 @@ import java.util.UUID;
 public class ArchiveController {
     private final ArchiveOrchestrator archiveOrchestrator;
 
+    @Deprecated
     @PostMapping("/recorded-video")
     public ApiResponse uploadRecordedVideo(@RequestParam("video") MultipartFile video, @RequestParam("storyboardId") String storyboardId) {
         try {
