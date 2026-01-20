@@ -11,4 +11,5 @@ public interface RecapReservationRepository {
     void linkAudioRecording(UUID recapReservationId, UUID audioRecordingId);
     void linkRecapResult(UUID recapReservationId, UUID recapResultId);
     Optional<InterviewAudioRecording> findAudioByRecapReservationId(UUID recapReservationId);
+    void deleteRecapReservation(UUID recapReservationId);
 }

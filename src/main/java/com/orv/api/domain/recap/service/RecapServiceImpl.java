@@ -9,6 +9,7 @@ import com.orv.api.domain.recap.service.dto.RecapResultInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.time.ZonedDateTime;
@@ -74,5 +75,10 @@ public class RecapServiceImpl implements RecapService {
                         audioRecording.getRunningTime(),
                         audioRecording.getCreatedAt()
                 ));
+    }
+
+    @Override
+    public void deleteRecapReservation(UUID recapReservationId) {
+        recapRepository.deleteRecapReservation(recapReservationId);
     }
 }

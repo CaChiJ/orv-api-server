@@ -3,6 +3,7 @@ package com.orv.api.domain.media.repository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -50,6 +51,12 @@ public class JdbcInterviewAudioRecordingRepository implements InterviewAudioReco
         } catch (org.springframework.dao.EmptyResultDataAccessException e) {
             return Optional.empty();
         }
+    }
+
+    @Override
+    public void delete(UUID id) {
+        String sql = "DELETE FROM interview_audio_recording WHERE id = ?";
+        jdbcTemplate.update(sql, id);
     }
 
     private static class InterviewAudioRecordingRowMapper implements RowMapper<InterviewAudioRecording> {

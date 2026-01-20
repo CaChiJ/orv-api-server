@@ -7,6 +7,7 @@ import com.orv.api.domain.storyboard.service.dto.StoryboardPreviewInfo;
 import com.orv.api.domain.storyboard.service.dto.Topic;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,6 +27,7 @@ public class StoryboardService {
         return storyboardRepository.findScenesByStoryboardId(storyboardId);
     }
 
+    @Transactional
     public Optional<Scene> getSceneAndUpdateUsageHistory(UUID sceneId, UUID memberId) {
         Optional<Scene> foundScene = storyboardRepository.findSceneById(sceneId);
 
