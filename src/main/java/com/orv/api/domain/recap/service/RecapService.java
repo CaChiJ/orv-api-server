@@ -16,4 +16,5 @@ public interface RecapService {
     Optional<UUID> saveRecapResult(UUID recapReservationId, List<RecapContent> recapContent);
     Optional<RecapResultInfo> getRecapResult(UUID recapReservationId);
     Optional<RecapAudioInfo> getRecapAudio(UUID recapReservationId);
+    void deleteRecapReservation(UUID recapReservationId);
 }

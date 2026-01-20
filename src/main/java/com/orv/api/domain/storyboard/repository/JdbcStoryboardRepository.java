@@ -8,6 +8,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.orv.api.domain.storyboard.service.dto.Scene;
 import com.orv.api.domain.storyboard.service.dto.Storyboard;
@@ -23,7 +25,6 @@ public class JdbcStoryboardRepository implements StoryboardRepository {
     private final JdbcTemplate jdbcTemplate;
     private final SimpleJdbcInsert simpleJdbcInsertStoryboard;
     private final SimpleJdbcInsert simpleJdbcInsertScene;
-    private final SimpleJdbcInsert simpleJdbcInsertUsageHistory;
 
     public JdbcStoryboardRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -35,11 +36,6 @@ public class JdbcStoryboardRepository implements StoryboardRepository {
         this.simpleJdbcInsertScene = new SimpleJdbcInsert(jdbcTemplate)
                 .withTableName("scene")
                 .usingColumns("name", "scene_type", "content", "storyboard_id")
-                .usingGeneratedKeyColumns("id");
-
-        this.simpleJdbcInsertUsageHistory = new SimpleJdbcInsert(jdbcTemplate)
-                .withTableName("storyboard_usage_history")
-                .usingColumns("storyboard_id", "member_id", "status")
                 .usingGeneratedKeyColumns("id");
     }
 
@@ -133,35 +129,33 @@ public class JdbcStoryboardRepository implements StoryboardRepository {
 
     @Override
     public boolean updateUsageHistory(UUID storyboardId, UUID memberId, String status) {
-        // 조건에 맞는 기존 레코드 조회
-        String selectSql = "SELECT id FROM storyboard_usage_history " +
-                "WHERE storyboard_id = ? AND member_id = ? " +
-                "  AND status <> 'COMPLETED' " +
-                "  AND created_at >= (CURRENT_TIMESTAMP - INTERVAL '1 hour') " +
-                "LIMIT 1";
+        // 단일 쿼리로 UPDATE 또는 INSERT 수행 (race condition 방지)
+        // CTE를 사용하여 먼저 UPDATE를 시도하고, UPDATE된 행이 없으면 INSERT
+        String sql = "WITH updated AS ( " +
+                "    UPDATE storyboard_usage_history " +
+                "    SET updated_at = CURRENT_TIMESTAMP, status = ? " +
+                "    WHERE storyboard_id = ? AND member_id = ? " +
+                "      AND status <> 'COMPLETED' " +
+                "      AND created_at >= (CURRENT_TIMESTAMP - INTERVAL '1 hour') " +
+                "    RETURNING id " +
+                "), inserted AS ( " +
+                "    INSERT INTO storyboard_usage_history (storyboard_id, member_id, status) " +
+                "    SELECT ?, ?, ? " +
+                "    WHERE NOT EXISTS (SELECT 1 FROM updated) " +
+                "    RETURNING id " +
+                ") " +
+                "SELECT COUNT(*) as affected FROM ( " +
+                "    SELECT id FROM updated " +
+                "    UNION ALL " +
+                "    SELECT id FROM inserted " +
+                ") as result";
 
-        List<UUID> existingIds = jdbcTemplate.query(selectSql, new Object[]{storyboardId, memberId},
-                (rs, rowNum) -> (UUID) rs.getObject("id"));
+        Integer affectedRows = jdbcTemplate.queryForObject(sql, Integer.class,
+                status, storyboardId, memberId,  // UPDATE parameters
+                storyboardId, memberId, status   // INSERT parameters
+        );
 
-        if (!existingIds.isEmpty()) {
-            // 조건에 맞는 레코드가 존재하면 UPDATE
-            UUID recordId = existingIds.get(0);
-            String updateSql = "UPDATE storyboard_usage_history " +
-                    "SET updated_at = CURRENT_TIMESTAMP, status = ? " +
-                    "WHERE id = ?";
-            int updatedRows = jdbcTemplate.update(updateSql, status, recordId);
-            return updatedRows > 0;
-        } else {
-            // 해당 조건의 레코드가 없으면 INSERT
-            Map<String, Object> parameters = new HashMap<>();
-            parameters.put("storyboard_id", storyboardId);
-            parameters.put("member_id", memberId);
-            parameters.put("status", status);
-
-            // updated_at, created_at은 DEFAULT로 CURRENT_TIMESTAMP가 들어감
-            KeyHolder keyHolder = simpleJdbcInsertUsageHistory.executeAndReturnKeyHolder(new MapSqlParameterSource(parameters));
-            return keyHolder.getKeys() != null;
-        }
+        return affectedRows != null && affectedRows > 0;
     }
 
     @Override

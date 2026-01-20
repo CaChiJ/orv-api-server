@@ -4,6 +4,7 @@ import com.orv.api.domain.reservation.repository.InterviewReservationRepository;
 import com.orv.api.domain.reservation.service.dto.InterviewReservation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -31,6 +32,7 @@ public class InterviewReservationServiceImpl implements InterviewReservationServ
     }
 
     @Override
+    @Transactional
     public Optional<UUID> reserveInstantInterview(UUID memberId, UUID storyboardId) throws Exception {
         OffsetDateTime scheduledAt = OffsetDateTime.now();
         // Instant interview is scheduled 9 hours later in DB logic from original code, maintaining it.

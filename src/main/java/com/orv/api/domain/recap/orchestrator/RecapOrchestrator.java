@@ -40,49 +40,68 @@ public class RecapOrchestrator {
     private final RecapClient recapClient;
 
     public Optional<RecapReservationResponse> reserveRecap(UUID memberId, UUID videoId, ZonedDateTime scheduledAt) throws IOException {
-        // 1. Create Recap Reservation in DB
+        // 1. 예약 생성
         Optional<UUID> recapIdOptional = recapService.reserveRecap(memberId, videoId, scheduledAt);
         if (recapIdOptional.isEmpty()) {
             return Optional.empty();
         }
         UUID recapReservationId = recapIdOptional.get();
+        log.info("Created recap reservation: {}", recapReservationId);
 
-        // 2. Get Video Info & Stream
-        Video video = archiveService.getVideo(videoId)
-                .orElseThrow(() -> new IOException("Video with ID " + videoId + " not found."));
+        try {
+            // 2. 비디오 정보 조회
+            Video video = archiveService.getVideo(videoId)
+                    .orElseThrow(() -> new IOException("Video with ID " + videoId + " not found."));
 
-        Optional<InputStream> videoStreamOptional = archiveService.getVideoStream(videoId);
-        if (videoStreamOptional.isEmpty()) {
-            throw new IOException("Failed to retrieve video stream for video ID " + videoId);
-        }
+            Optional<InputStream> videoStreamOptional = archiveService.getVideoStream(videoId);
+            if (videoStreamOptional.isEmpty()) {
+                throw new IOException("Failed to retrieve video stream for video ID " + videoId);
+            }
 
-        // 3. Extract and save audio
-        InterviewAudioRecording audioRecording;
-        try (InputStream videoStream = videoStreamOptional.get()) {
-             audioRecording = audioService.extractAndSaveAudioFromVideo(
-                    videoStream,
-                    video.getStoryboardId(),
+            // 3. 오디오 추출 및 저장
+            InterviewAudioRecording audioRecording;
+            try (InputStream videoStream = videoStreamOptional.get()) {
+                 audioRecording = audioService.extractAndSaveAudioFromVideo(
+                        videoStream,
+                        video.getStoryboardId(),
+                        memberId,
+                        video.getTitle() != null ? video.getTitle() + " (Recap Audio)" : "Recap Audio",
+                        video.getRunningTime()
+                );
+            }
+            log.info("Extracted and saved audio: {}", audioRecording.getId());
+
+            // 4. 예약-오디오 연결 (DB)
+            try {
+                recapService.linkAudioRecording(recapReservationId, audioRecording.getId());
+                log.info("Linked audio to recap reservation: {}", recapReservationId);
+            } catch (Exception e) {
+                // 연결 실패 시 오디오 삭제 및 예외 전파 (상위 catch에서 예약 삭제됨)
+                log.error("Failed to link audio. Compensating audio upload...", e);
+                audioService.deleteAudio(audioRecording.getId(), audioRecording.getAudioUrl());
+                throw e;
+            }
+
+            // 5. 외부 리캡 서버 호출
+            callRecapServer(recapReservationId, video, audioRecording.getAudioUrl());
+
+            return Optional.of(new RecapReservationResponse(
+                    recapReservationId,
                     memberId,
-                    video.getTitle() != null ? video.getTitle() + " (Recap Audio)" : "Recap Audio",
-                    video.getRunningTime()
-            );
+                    videoId,
+                    scheduledAt.toLocalDateTime(),
+                    LocalDateTime.now()
+            ));
+
+        } catch (Exception e) {
+            // 모든 하위 단계 실패 시 예약 삭제 (보상 트랜잭션)
+            log.error("Failed to reserve recap. Compensating reservation...", e);
+            recapService.deleteRecapReservation(recapReservationId);
+            throw e;
         }
-
-        // 4. Link Audio to Reservation
-        recapService.linkAudioRecording(recapReservationId, audioRecording.getId());
-
-        // 5. Call Recap Server
-        callRecapServer(recapReservationId, video, audioRecording.getAudioUrl());
-
-        return Optional.of(new RecapReservationResponse(
-                recapReservationId,
-                memberId,
-                videoId,
-                scheduledAt.toLocalDateTime(),
-                LocalDateTime.now()
-        ));
     }
 
+    // TODO: 외부 API 호출 방식 결정 후 적절한 클래스로 아래 로직을 이동시켜야 함.
     private void callRecapServer(UUID recapReservationId, Video video, String audioS3Url) {
         try {
             // 1. Get storyboard and scene info
